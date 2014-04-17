@@ -1,3 +1,6 @@
+
+
+
 // An html parser written in JavaScript
 // Based on http://ejohn.org/blog/pure-javascript-html-parser/
 
@@ -21,9 +24,10 @@
 
 
   // Regular Expressions for parsing tags and attributes
-  var startTag = /^<([\-A-Za-z0-9_]+)((?:\s+[\w\-]+(?:\s*=?\s*(?:(?:"[^"]*")|(?:'[^']*')|[^>\s]+))?)*)\s*(\/?)>/;
+  // Edited by kchang, to support tags with colons like <uim:ad>
+  var startTag = /^<([\-A-Za-z0-9_:]+)((?:\s+[\w\-]+(?:\s*=?\s*(?:(?:"[^"]*")|(?:'[^']*')|[^>\s]+))?)*)\s*(\/?)>/;
   var endTag = /^<\/([\-A-Za-z0-9_]+)[^>]*>/;
-  var attr = /([\-A-Za-z0-9_]+)(?:\s*=\s*(?:(?:"((?:\\.|[^"])*)")|(?:'((?:\\.|[^'])*)')|([^>\s]+)))?/g;
+  var attr = /([\-A-Za-z0-9_:-]+)(?:\s*=\s*(?:(?:"((?:\\.|[^"])*)")|(?:'((?:\\.|[^'])*)')|([^>\s]+)))?/g;
   var fillAttr = /^(checked|compact|declare|defer|disabled|ismap|multiple|nohref|noresize|noshade|nowrap|readonly|selected)$/i;
 
   var DEBUG = false;
@@ -84,6 +88,8 @@
             tagName: match[1],
             length: match[0].length
           };
+        } else {
+          console.log('[htmlParser.js] Found invalid end tag!');
         }
       },
 
@@ -127,6 +133,8 @@
             unary: !!match[3],
             length: match[0].length
           };
+        } else {
+          console.log('[htmlParser.js] Found invalid start tag: ' + stream);
         }
       },
 

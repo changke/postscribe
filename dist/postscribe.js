@@ -1,5 +1,8 @@
 /* Asynchronously write javascript, even with document.write., v1.2.0 https://krux.github.io/postscribe
-Copyright (c) 2014 Derek Brans, MIT license https://github.com/krux/postscribe/blob/master/LICENSE */// An html parser written in JavaScript
+Copyright (c) 2014 Derek Brans, MIT license https://github.com/krux/postscribe/blob/master/LICENSE */
+
+
+// An html parser written in JavaScript
 // Based on http://ejohn.org/blog/pure-javascript-html-parser/
 
 (function() {
@@ -22,9 +25,10 @@ Copyright (c) 2014 Derek Brans, MIT license https://github.com/krux/postscribe/b
 
 
   // Regular Expressions for parsing tags and attributes
-  var startTag = /^<([\-A-Za-z0-9_]+)((?:\s+[\w\-]+(?:\s*=\s*(?:(?:"[^"]*")|(?:'[^']*')|[^>\s]+))?)*)\s*(\/?)>/;
+  // Edited by kchang, to support tags with colons like <uim:ad>
+  var startTag = /^<([\-A-Za-z0-9_:]+)((?:\s+[\w\-]+(?:\s*=?\s*(?:(?:"[^"]*")|(?:'[^']*')|[^>\s]+))?)*)\s*(\/?)>/;
   var endTag = /^<\/([\-A-Za-z0-9_]+)[^>]*>/;
-  var attr = /([\-A-Za-z0-9_]+)(?:\s*=\s*(?:(?:"((?:\\.|[^"])*)")|(?:'((?:\\.|[^'])*)')|([^>\s]+)))?/g;
+  var attr = /([\-A-Za-z0-9_:-]+)(?:\s*=\s*(?:(?:"((?:\\.|[^"])*)")|(?:'((?:\\.|[^'])*)')|([^>\s]+)))?/g;
   var fillAttr = /^(checked|compact|declare|defer|disabled|ismap|multiple|nohref|noresize|noshade|nowrap|readonly|selected)$/i;
 
   var DEBUG = false;
@@ -85,6 +89,8 @@ Copyright (c) 2014 Derek Brans, MIT license https://github.com/krux/postscribe/b
             tagName: match[1],
             length: match[0].length
           };
+        } else {
+          console.log('[htmlParser.js] Found invalid end tag!');
         }
       },
 
@@ -128,6 +134,8 @@ Copyright (c) 2014 Derek Brans, MIT license https://github.com/krux/postscribe/b
             unary: !!match[3],
             length: match[0].length
           };
+        } else {
+          console.log('[htmlParser.js] Found invalid start tag: ' + stream);
         }
       },
 
@@ -853,7 +861,12 @@ Copyright (c) 2014 Derek Brans, MIT license https://github.com/krux/postscribe/b
       // Override document.write.
       var doc = el.ownerDocument;
 
-      var stash = { write: doc.write, writeln: doc.writeln };
+      var stash = {
+        close: doc.close,
+        open: doc.open,
+        write: doc.write,
+        writeln: doc.writeln
+      };
 
       function write(str) {
         str = options.beforeWrite(str);
@@ -862,6 +875,8 @@ Copyright (c) 2014 Derek Brans, MIT license https://github.com/krux/postscribe/b
       }
 
       set(doc, {
+        close: doNothing,
+        open: doNothing,
         write: function(){
           return write(toArray(arguments).join(''));
         },
