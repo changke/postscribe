@@ -14,7 +14,7 @@ Other tag writing libraries exist (see [alternatives](#alternatives)), but PostS
 For more information:
 
 * [Presentation at HTML5devconf](http://youtu.be/ClzeilKwX10) by the author, Derek Brans
-* [Interactive Demo](http://raw.plnkr.co/e8MJAx/) with side by side comparisons of other tag writers
+* [Interactive Demo](http://run.plnkr.co/plunks/e8MJAx/) with side by side comparisons of other tag writers
 * [Documentation](https://github.com/krux/postscribe/tree/master/doc)
 * Browse the [raw](https://github.com/krux/postscribe/blob/master/postscribe.js) or [annotated](http://krux.github.com/postscribe/doc/postscribe.html) source code.
 
@@ -70,6 +70,20 @@ Instead, remove the ad call and close the div
       });
     </script>
 
+There are some hooks you may pass as the third argument. For example:
+
+    <script type="text/javascript">
+      // jQuery used as an example of delaying until load.
+      $(function() {
+        postscribe('#ad', '<script src=doubleclick_url_with_params><\/script>', {
+          done: function() {
+            console.info('Dblclick script has been delivered.');
+          }
+        });
+      });
+    </script>
+
+See the beginning of [postscribe.js](./postscribe.js) for a complete list.
 
 # FAQ
 ##### Does it work with jQuery, Prototype, Backbone, Underscore, jQuery UI, YUI, mooTools, dojo, etc.?
@@ -138,7 +152,7 @@ Try forking [this jsfiddle](http://jsfiddle.net/dbrans/Znpxv/). We've set everyt
 ## Testing
 Using [travis-ci](https://travis-ci.org) and [grunt](http://gruntjs.com), the [Qunit](http://qunitjs.com) unit tests are run on every commit using PhantomJS to run the tests with a real browser.
 
-Current Build Status: [![Build Status](https://secure.travis-ci.org/krux/postscribe.png)](http://travis-ci.org/krux/postscribe)
+Current Build Status: [![Build Status](https://travis-ci.org/krux/postscribe.svg?branch=master)](https://travis-ci.org/krux/postscribe)
 
 To run the tests:
 
@@ -155,6 +169,13 @@ We use jshint to do static analysis of the javascript and keep things smelling g
 
 # History
 Postscribe uses [software versioning standards](http://semver.org) as follows: major.new.maintenance[.trivial]. There are git tags for each release if you would like to see older versions.
+
+
+##### 1.3.2
+* Screwed up the tagging. (automation coming soon...)
+
+##### 1.3.0
+* Adds hooks around queuing and stream starting.
 
 ##### 1.2.0
 * Adds option to not overwrite doc.write while script[async] is loading.

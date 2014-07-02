@@ -1,13 +1,42 @@
-//     postscribe.js 1.2.0
+//     postscribe.js 1.3.2
 //     (c) Copyright 2012 to the present, Krux
 //     postscribe is freely distributable under the MIT license.
 //     For all details and documentation:
 //     http://krux.github.io/postscribe
-
-
+/*globals htmlParser:false*/
 (function() {
+  // A function that intentionally does nothing.
+  function doNothing() {}
+
+  // Available options and defaults.
+  var OPTIONS = {
+    // Called when an async script has loaded.
+    afterAsync: doNothing,
+    // Called immediately before removing from the write queue.
+    afterDequeue: doNothing,
+    // Called sync after a stream's first thread release.
+    afterStreamStart: doNothing,
+    // Called after writing buffered document.write calls.
+    afterWrite: doNothing,
+    // Called immediately before adding to the write queue.
+    beforeEnqueue: doNothing,
+    // Called before writing buffered document.write calls.
+    beforeWrite: function(str) { return str; },
+    // Called when evaluation is finished.
+    done: doNothing,
+    // Called when a write results in an error.
+    error: function(e) { throw e; },
+    // Whether to let scripts w/ async attribute set fall out of the queue.
+    releaseAsync: false
+  };
 
   var global = this;
+
+  var UNDEFINED = void 0;
+
+  function existy(thing) {
+    return thing !== UNDEFINED && thing !== null;
+  }
 
   if(global.postscribe) {
     return;
@@ -20,13 +49,9 @@
 
   var slice = Array.prototype.slice;
 
-  // A function that intentionally does nothing.
-  function doNothing() {}
-
-
   // Is this a function?
   function isFunction(x) {
-    return "function" === typeof x;
+    return 'function' === typeof x;
   }
 
   // Loop over each item in an array-like value.
@@ -59,7 +84,7 @@
   function defaults(options, _defaults) {
     options = options || {};
     eachKey(_defaults, function(key, val) {
-      if(options[key] == null) {
+      if(!existy(options[key])) {
         options[key] = val;
       }
     });
@@ -79,9 +104,17 @@
     }
   }
 
+  var last = function(array) {
+    return array[array.length - 1];
+  };
+
   // Test if token is a script tag.
   function isScript(tok) {
-    return (/^script$/i).test(tok.tagName);
+    return !tok || !('tagName' in tok) ? !1 : !!~tok.tagName.toLowerCase().indexOf('script');
+  }
+
+  function isStyle(tok) {
+    return !tok || !('tagName' in tok) ? !1 : !!~tok.tagName.toLowerCase().indexOf('style');
   }
 
   // # Class WriteStream
@@ -113,9 +146,9 @@
         var val = el.getAttribute(attr);
 
         // IE 8 returns a number if it's a number
-        return val == null ? val : String(val);
+        return !existy(val) ? val : String(val);
 
-      } else if( value != null && value !== '') {
+      } else if(existy(value) && value !== '') {
         // Set
         el.setAttribute(attr, value);
 
@@ -137,7 +170,7 @@
 
         doc: doc,
 
-        parser: global.htmlParser('', { autoFix: true }),
+        parser: htmlParser('', { autoFix: true }),
 
         // Actual elements by id.
         actuals: [root],
@@ -156,7 +189,6 @@
       data(this.proxyRoot, 'proxyof', 0);
 
     }
-
 
     WriteStream.prototype.write = function() {
       [].push.apply(this.writeQueue, arguments);
@@ -177,7 +209,7 @@
     };
 
     WriteStream.prototype.callFunction = function(fn) {
-      var tok = { type: "function", value: fn.name || fn.toString() };
+      var tok = { type: 'function', value: fn.name || fn.toString() };
       this.onScriptStart(tok);
       fn.call(this.win, this.doc);
       this.onScriptDone(tok);
@@ -186,20 +218,22 @@
     WriteStream.prototype.writeImpl = function(html) {
       this.parser.append(html);
 
-      var tok, tokens = [];
+      var tok, tokens = [], script, style;
 
       // stop if we see a script token
-      while((tok = this.parser.readToken()) && !isScript(tok)) {
+      while((tok = this.parser.readToken()) && !(script=isScript(tok)) && !(style=isStyle(tok))) {
         tokens.push(tok);
       }
 
       this.writeStaticTokens(tokens);
 
-      if(tok) {
+      if(script) {
         this.handleScriptToken(tok);
       }
+      if(style){
+        this.handleStyleToken(tok);
+      }
     };
-
 
     // ## Contiguous non-script tokens (a chunk)
     WriteStream.prototype.writeStaticTokens = function(tokens) {
@@ -228,7 +262,6 @@
       return chunk;
     };
 
-
     WriteStream.prototype.buildChunk = function (tokens) {
       var nextId = this.actuals.length,
 
@@ -256,7 +289,7 @@
             );
 
             // Don't proxy scripts: they have no bearing on DOM structure.
-            if(tok.attrs.id !== "ps-script") {
+            if(tok.attrs.id !== 'ps-script' && tok.attrs.id !== 'ps-style') {
               // Proxy: strip all attributes and inject proxyof attribute
               proxy.push(
                 // ignore atomic tags (e.g., style): they have no "structural" effect
@@ -288,7 +321,7 @@
 
       // use shift/unshift so that children are walked in document order
 
-      while((node = stack.shift()) != null) {
+      while(existy(node = stack.shift())) {
 
         var isElement = node.nodeType === 1;
         var isProxy = isElement && data(node, 'proxyof');
@@ -315,7 +348,6 @@
     };
 
     // ### Script tokens
-
     WriteStream.prototype.handleScriptToken = function(tok) {
       var remainder = this.parser.clear();
 
@@ -324,6 +356,7 @@
         this.writeQueue.unshift(remainder);
       }
 
+      //noinspection JSUnresolvedVariable
       tok.src = tok.attrs.src || tok.attrs.SRC;
 
       if(tok.src && this.scriptStack.length) {
@@ -343,6 +376,69 @@
 
     };
 
+    // ### Style tokens
+    WriteStream.prototype.handleStyleToken = function(tok) {
+      var remainder = this.parser.clear();
+
+      if(remainder) {
+        // Write remainder immediately behind this style.
+        this.writeQueue.unshift(remainder);
+      }
+
+      tok.type = tok.attrs.type || tok.attrs.TYPE || 'text/css';
+
+      // Put the style node in the DOM.
+      this.writeStyleToken(tok);
+
+      if(remainder) {
+        this.write();
+      }
+    };
+
+    // Build a style and insert it into the DOM.
+    WriteStream.prototype.writeStyleToken = function(tok) {
+      var el = this.buildStyle(tok);
+
+      this.insertStyle(el);
+
+      // Set content
+      if(tok.content) {
+        //noinspection JSUnresolvedVariable
+        if(el.styleSheet && !el.sheet) {
+          el.styleSheet.cssText=tok.content;
+        }
+        else {
+          el.appendChild(this.doc.createTextNode(tok.content));
+        }
+      }
+    };
+
+    // Build a style element from an atomic style token.
+    WriteStream.prototype.buildStyle = function(tok) {
+      var el = this.doc.createElement(tok.tagName);
+
+      el.setAttribute('type', tok.type);
+      // Set attributes
+      eachKey(tok.attrs, function(name, value) {
+        el.setAttribute(name, value);
+      });
+
+      return el;
+    };
+
+    // Insert style into DOM where it would naturally be written.
+    WriteStream.prototype.insertStyle = function(el) {
+      // Append a span to the stream. That span will act as a cursor
+      // (i.e. insertion point) for the style.
+      this.writeImpl('<span id="ps-style"/>');
+
+      // Grab that span from the DOM.
+      var cursor = this.doc.getElementById('ps-style');
+
+      // Replace cursor with style.
+      cursor.parentNode.replaceChild(el, cursor);
+    };
+
     WriteStream.prototype.onScriptStart = function(tok) {
       tok.outerWrites = this.writeQueue;
       this.writeQueue = [];
@@ -352,7 +448,7 @@
     WriteStream.prototype.onScriptDone = function(tok) {
       // Pop script and check nesting.
       if(tok !== this.scriptStack[0]) {
-        this.options.error({ message: "Bad script nesting or script finished twice" });
+        this.options.error({ message: 'Bad script nesting or script finished twice' });
         return;
       }
       this.scriptStack.shift();
@@ -415,7 +511,6 @@
       return el;
     };
 
-
     // Insert script into DOM where it would naturally be written.
     WriteStream.prototype.insertScript = function(el) {
       // Append a span to the stream. That span will act as a cursor
@@ -423,35 +518,45 @@
       this.writeImpl('<span id="ps-script"/>');
 
       // Grab that span from the DOM.
-      var cursor = this.doc.getElementById("ps-script");
+      var cursor = this.doc.getElementById('ps-script');
 
       // Replace cursor with script.
       cursor.parentNode.replaceChild(el, cursor);
     };
 
-
     WriteStream.prototype.scriptLoadHandler = function(el, done) {
       function cleanup() {
         el = el.onload = el.onreadystatechange = el.onerror = null;
-        done();
       }
 
       // Error handler
       var error = this.options.error;
 
+      function success() {
+        cleanup();
+        done();
+      }
+
+      function failure(err) {
+        cleanup();
+        error(err);
+        done();
+      }
+
       // Set handlers
       set(el, {
-        onload: function() { cleanup(); },
+        onload: function() {
+          success();
+        },
 
         onreadystatechange: function() {
           if(/^(loaded|complete)$/.test( el.readyState )) {
-            cleanup();
+            success();
           }
         },
 
         onerror: function() {
-          error({ message: 'remote script failed ' + el.src });
-          cleanup();
+          failure({ message: 'remote script failed ' + el.src });
         }
       });
     };
@@ -465,10 +570,8 @@
 
   }());
 
-
-
   // Public-facing interface and queuing
-  var postscribe = (function() {
+  global.postscribe = (function() {
     var nextId = 0;
 
     var queue = [];
@@ -477,11 +580,14 @@
 
     function nextStream() {
       var args = queue.shift();
+      var options;
       if(args) {
+        options = last(args);
+        options.afterDequeue();
         args.stream = runStream.apply(null, args);
+        options.afterStreamStart();
       }
     }
-
 
     function runStream(el, html, options) {
       active = new WriteStream(el, options);
@@ -544,19 +650,11 @@
       return active;
     }
 
-
     function postscribe(el, html, options) {
       if(isFunction(options)) {
         options = { done: options };
       }
-      options = defaults(options, {
-        releaseAsync: false,
-        afterAsync: doNothing,
-        done: doNothing,
-        error: function(e) { throw e; },
-        beforeWrite: function(str) { return str; },
-        afterWrite: doNothing
-      });
+      options = defaults(options, OPTIONS);
 
       el =
         // id selector
@@ -578,7 +676,9 @@
         }
       };
 
+      options.beforeEnqueue(args);
       queue.push(args);
+
       if(!active) {
         nextStream();
       }
@@ -594,10 +694,5 @@
       // Expose internal classes.
       WriteStream: WriteStream
     });
-
   }());
-
-  // export postscribe
-  global.postscribe = postscribe;
-
 }());

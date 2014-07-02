@@ -3,7 +3,8 @@
 
 // An html parser written in JavaScript
 // Based on http://ejohn.org/blog/pure-javascript-html-parser/
-
+//TODO(#39)
+/*globals console:false*/
 (function() {
   var supports = (function() {
     var supports = {};
@@ -11,11 +12,11 @@
     var html;
     var work = this.document.createElement('div');
 
-    html = "<P><I></P></I>";
+    html = '<P><I></P></I>';
     work.innerHTML = html;
     supports.tagSoup = work.innerHTML !== html;
 
-    work.innerHTML = "<P><i><P></P></i></P>";
+    work.innerHTML = '<P><i><P></P></i></P>';
     supports.selfClose = work.childNodes.length === 2;
 
     return supports;
@@ -49,6 +50,13 @@
 
     var stack = [];
 
+    var unescapeHTMLEntities = function(html) {
+      return typeof html === 'string' ? html.replace(/(&#\d{1,4};)/gm, function(match){
+        var code = match.substring(2,match.length-1);
+        return String.fromCharCode(code);
+      }) : html;
+    };
+
     var append = function(str) {
       stream += str;
     };
@@ -62,7 +70,7 @@
     var detect = {
       comment: /^<!--/,
       endTag: /^<\//,
-      atomicTag: /^<\s*(script|style|noscript|iframe|textarea)[\s>]/i,
+      atomicTag: /^<\s*(script|style|noscript|iframe|textarea)[\s\/>]/i,
       startTag: /^</,
       chars: /^[^<]/
     };
@@ -71,7 +79,7 @@
     var reader = {
 
       comment: function() {
-        var index = stream.indexOf("-->");
+        var index = stream.indexOf('-->');
         if ( index >= 0 ) {
           return {
             content: stream.substr(4, index),
@@ -98,9 +106,9 @@
         if(start) {
           var rest = stream.slice(start.length);
           // for optimization, we check first just for the end tag
-          if(rest.match(new RegExp("<\/\\s*" + start.tagName + "\\s*>", "i"))) {
+          if(rest.match(new RegExp('<\/\\s*' + start.tagName + '\\s*>', 'i'))) {
             // capturing the content is inefficient, so we do it inside the if
-            var match = rest.match(new RegExp("([\\s\\S]*?)<\/\\s*" + start.tagName + "\\s*>", "i"));
+            var match = rest.match(new RegExp('([\\s\\S]*?)<\/\\s*' + start.tagName + '\\s*>', 'i'));
             if(match) {
               // good to go
               return {
@@ -124,7 +132,7 @@
             var value = arguments[2] || arguments[3] || arguments[4] ||
               fillAttr.test(name) && name || null;
 
-            attrs[name] = value;
+            attrs[name] = unescapeHTMLEntities(value);
           });
 
           return {
@@ -139,7 +147,7 @@
       },
 
       chars: function() {
-        var index = stream.indexOf("<");
+        var index = stream.indexOf('<');
         return {
           length: index >= 0 ? index : stream.length
         };
@@ -173,7 +181,7 @@
 
     var readTokens = function(handlers) {
       var tok;
-      while(tok = readToken()) {
+      while((tok = readToken())) {
         // continue until we get an explicit "false" return
         if(handlers[tok.type] && handlers[tok.type](tok) === false) {
           return;
@@ -212,7 +220,7 @@
         };
 
         stack.containsTagName = function(tagName) {
-          for(var i = 0, tok; tok = this[i]; i++) {
+          for(var i = 0, tok; (tok = this[i]); i++) {
             if(tok.tagName === tagName) {
               return true;
             }
@@ -251,15 +259,13 @@
             if(tagName.toUpperCase() === 'TR' && stack.lastTagNameEq('TABLE')) {
               prepend('<TBODY>');
               prepareNextToken();
-            } else if(options.fix_selfClose &&
-              CLOSESELF.test(tagName) &&
-              stack.containsTagName(tagName)) {
-                if(stack.lastTagNameEq(tagName)) {
-                  closeLast();
-                } else {
-                  prepend('</'+tok.tagName+'>');
-                  prepareNextToken();
-                }
+            } else if(options.fix_selfClose && CLOSESELF.test(tagName) && stack.containsTagName(tagName)) {
+              if(stack.lastTagNameEq(tagName)) {
+                closeLast();
+              } else {
+                prepend('</'+tok.tagName+'>');
+                prepareNextToken();
+              }
             } else if (!tok.unary) {
               stack.push(tok);
             }
