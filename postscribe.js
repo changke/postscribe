@@ -477,6 +477,7 @@
       if(tok.src) {
         // Fix for attribute "SRC" (capitalized). IE does not recognize it.
         el.src = tok.src;
+        el.src = el.src.replace(/&amp;/g, '&'); // changke: fix ad-service
         this.scriptLoadHandler(el, !asyncRelease ? function() {
           done();
           afterAsync();
