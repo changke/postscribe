@@ -170,7 +170,7 @@
 
         doc: doc,
 
-        parser: htmlParser('', { autoFix: true }),
+        parser: htmlParser('', { autoFix: false }),
 
         // Actual elements by id.
         actuals: [root],
